@@ -1,0 +1,64 @@
+services:
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: ominimo-blog-app-prod
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=mariadb
+      - REDIS_HOST=redis
+      - NODE_ENV=production
+    depends_on:
+      - mariadb
+      - redis
+    networks:
+      - traefik_network
+      - ominimo-blog-prod
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ominimo-blog.rule=Host(`ominimoblog.takacsoliver.com`)"
+      - "traefik.http.routers.ominimo-blog.entrypoints=websecure"
+      - "traefik.http.routers.ominimo-blog.tls.certresolver=letsencrypt"
+      - "traefik.http.services.ominimo-blog.loadbalancer.server.port=80"
+      - "traefik.docker.network=traefik_network"
+
+  mariadb:
+    image: mariadb:11.3
+    container_name: ominimo-blog-mariadb-prod
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_password}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mariadb_data_prod:/var/lib/mysql
+    networks:
+      - ominimo-blog-prod
+
+  redis:
+    image: redis:7-alpine
+    container_name: ominimo-blog-redis-prod
+    restart: unless-stopped
+    volumes:
+      - redis_data_prod:/data
+    networks:
+      - ominimo-blog-prod
+
+volumes:
+  mariadb_data_prod:
+    driver: local
+  redis_data_prod:
+    driver: local
+
+networks:
+  ominimo-blog-prod:
+    driver: bridge
+  traefik_network:
+    external: true

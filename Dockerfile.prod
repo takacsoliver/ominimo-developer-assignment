@@ -1,0 +1,47 @@
+FROM dunglas/frankenphp:latest
+
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    zip \
+    unzip \
+    mariadb-client \
+    default-mysql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN docker-php-ext-install pdo_mysql pcntl
+
+RUN pecl install redis && docker-php-ext-enable redis
+
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs
+
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm ci --legacy-peer-deps
+
+COPY . .
+
+RUN composer install --no-dev --optimize-autoloader --no-interaction --verbose
+
+RUN npm run build
+
+RUN npm prune --production --legacy-peer-deps
+
+RUN chown -R www-data:www-data /app \
+    && chmod -R 755 /app/storage \
+    && chmod -R 755 /app/bootstrap/cache
+
+COPY docker/Caddyfile /etc/caddy/Caddyfile
+
+EXPOSE 80
+
+# TODO: Implement octane server instead of artisan serve
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=80"]
